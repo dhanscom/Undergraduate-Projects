@@ -1,0 +1,84 @@
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+import csv
+
+# The first step of the project is to find the drift estimator and volatility estimator
+# This can be done by using the closing prices to find the log returns which approximates the returns
+# Using the log returns, both the drift estimator and volatility estimator can be found
+
+closePrice = np.array([])
+count = 0
+with open('RTX.csv', 'r') as csvfile:
+    csvreader = csv.reader(csvfile)
+    # Skip column headers from downloaded data (Yahoo Finance has comment headers)
+    next(csvreader)
+    for row in csvreader:
+        closePrice = np.append(closePrice, float(row[4]))
+        count += 1
+# Initial price is set to the starting closing price
+S0 = closePrice[0]
+
+# Specified change in time
+dt = 0.0002
+
+# N is an integer that represents the amount of intervals dt between the starting date and the maturity date
+# N has been casted as an integer because dt is a float
+# N uses count - 1 because sum of the log returns is one less than the total days
+N = int((count-1)/dt)
+
+DriftSum = 0
+for x in range(1, count):
+    # The closing prices were used to find the drift estimator
+    # Depending on the known situation, Either drift sum can be uncommented
+    # The variable DriftSum is the sum of log returns
+    DriftSum += np.log(closePrice[x]/closePrice[x-1])
+    #DriftSum += ((closePrice[x]-closePrice[x-1])/closePrice[x-1])
+
+# Calculation for the drift or growth rate according to Chapter II 4.10
+drift = DriftSum/(N*dt)
+
+volSum = 0
+for x in range (1, count):
+    # The log return of the closing prices and the drift estimator were used to find the sum of volatility
+    # The variable volSum represents the squared sum of the log returns subtracted by the drift estimator
+    # Depending on the known situation, Either volatility sum can be uncommented
+    volSum += (np.log(closePrice[x]/closePrice[x-1]) - drift*dt)**2
+    #volSum += (((closePrice[x]-closePrice[x-1])/closePrice[x-1]) - drift*dt)**2
+
+# Calculation for the volatility according to Chapter II 4.10
+sigma2 = volSum/((N-1)*dt)
+sigma = sigma2**(1/2)
+
+# The third step is to use an SDE to determine the change in price of a stock according to its parameters
+
+class Motion:
+    # The step function calculates the change in brownian motion according to sqrt(dt) * Zj+1
+    # Then uses the change in brownian motion to find the change in price
+    # This change in price is then added to the previous price
+    # And the current price is then changed to new price
+    def Step(self):
+        dB = math.sqrt(dt)*np.random.normal(0, 1)
+        dS = (self.drift+(1/2)*self.sigma*self.sigma)*self.dt*self.currPrice + self.sigma*self.currPrice*dB
+        self.price.append(self.currPrice + dS)
+        self.currPrice = self.currPrice + dS
+    # This function initializes parameters and creates the price array
+    def __init__(self, drift, sigma, dt, S0):
+        self.drift = drift
+        self.sigma = sigma
+        self.dt = dt
+        self.currPrice = S0
+        self.price = [S0]
+
+process = []
+# The Motion class is given drift, sigma, change in time, and initial price to create geometric brownian motion
+process.append(Motion(drift, sigma, dt, S0))
+# for loop steps through values between 0 and N-1 since S0 is the initial price
+for i in range(0, N-1):
+    # Process absorbs the price array in the Step function
+    process[0].Step()
+
+plt.plot(np.arange(0,len(process[0].price)), process[0].price)
+# The x-axis ticks were changed to represent the days rather than the N value
+plt.xticks(np.arange(0, N + N/count, N/count), range(0, count + 1))
+plt.show()
